@@ -1,0 +1,453 @@
+# =============================================================================
+# SVICLOUD TV Box — Blog Automation Config
+# =============================================================================
+# Produces identical behavior to the original blog_automation pipeline.
+# All Chinese prompts and SVICLOUD branding live here, not in Python code.
+
+site:
+  name: "SVICLOUD"
+  domain: "svicloudtvbox.us"
+  url: "https://svicloudtvbox.us"
+  default_market: "全美"
+
+language: zh-TW
+
+# -- API models ---------------------------------------------------------------
+apis:
+  claude_api_key_env: "CLAUDE_API_KEY"
+  openai_api_key_env: "OPENAI_API_KEY"
+  claude_model_brief: "claude-haiku-4-5-20251001"
+  claude_model_outline: "claude-haiku-4-5-20251001"
+  claude_model_full: "claude-sonnet-4-20250514"
+  claude_model_qa: "claude-haiku-4-5-20251001"
+  openai_embedding: "text-embedding-3-small"
+
+# -- Prompt templates ---------------------------------------------------------
+# Every stage reads prompts from here via self._prompt("key_name").
+# Variables: {site_name}, {keyword}, {topic_type}, {geo_target}, {brief},
+#            {outline}, {retry_note}, {min_length}, {content_sample},
+#            {truncated_note}, {max_len}, {disallow_clause}, {recent_clause}
+prompt_templates:
+  # --- Briefing stage ---
+  brief_system: >
+    你是 SVICLOUD 策略總監，撰寫100字簡報，聚焦美國本地內容體驗、售後與客服優勢。
+    主題分類：{topic_type}，地區：{geo_target}。
+  brief_user: >
+    請以100-150字撰寫策略簡報：
+    - 關鍵字：{keyword}
+    - 主題分類：{topic_type}
+    - 地區：{geo_target}
+    - 比較焦點：{is_comparison}
+    - 活動/節慶：{is_campaign}
+    務必強調：美國倉儲現貨/快速出貨、中文/雙語客服、售後保固與遠端協助；
+    並依主題分類選擇性帶到 4K/Wi‑Fi/Dolby 等規格（不要每篇都把 4K 當主角）。
+  fallback_brief: >
+    目標關鍵字：{keyword}
+    受眾：美國華人家庭、長輩與新移民
+    品牌重點：4K HDR + Dolby Audio、Wi-Fi 6 雙頻、中文/英文語音介面與一年美國保固。
+
+  # --- Outlining stage ---
+  outline_system: >
+    你是 SVICLOUD 編輯總監，產出5-7個段落，涵蓋美國倉儲、售後與FAQ。
+    主題分類：{topic_type}，地區：{geo_target}。
+  outline_user: >
+    {retry_note}，請依據以下簡報撰寫條列式大綱：
+
+    簡報：
+    {brief}
+
+    主題分類：{topic_type}
+    地區：{geo_target}
+    輸出格式：以數字排序的清單，每條不超過40字。
+    - 一定要有：美國本地服務（現貨/快速出貨、客服、保固/維修）
+    - 若是 comparison：要有明確對比段落
+    - 若是 campaign：要有季節/情境段落
+    - 若是 geo：要有地區生活情境段落
+    - 不要每一篇都用相同段落順序
+  fallback_outline_header: "## 專家指南概覽"
+  fallback_outline_header_retry: "## 再次優化專家概覽"
+
+  # Fallback section titles (used by outlining + drafting)
+  fallback_sections:
+    base:
+      - "SVICLOUD 美國本地服務優勢"
+      - "型號/方案與適用族群"
+      - "安裝步驟與售後支援"
+    comparison: "SVICLOUD 與競品差異"
+    geo: "{geo_target} 客戶專屬物流與體驗"
+    campaign: "活動/節慶使用情境"
+    faq: "常見問題與下一步"
+
+  # --- Drafting stage ---
+  full_post_system: >
+    你是 SVICLOUD 中文內容顧問，撰寫{min_length}字以上Markdown文章，
+    需含實例與內部連結。主題分類：{topic_type}，地區：{geo_target}。
+  full_post_user: >
+    請依據以下資訊撰寫完整部落格文章（Markdown）：
+    - 關鍵字：{keyword}
+    - 簡報：{brief}
+    - 大綱：
+    {outline}
+    - 主題分類：{topic_type}
+    - 地區：{geo_target}
+    需求：
+    1. 強調 SVICLOUD 服務優勢（美國倉儲、快速出貨、中文客服、保固）自然帶入。
+    2. 至少3個內部連結（以純文字描述，稍後由腳本替換）。
+    3. 每段落加入具體情境或案例。
+    4. 結尾加入CTA導引至購買/聯絡。
+    5. 如果提到競品比較，請直接寫出實際品牌或產品名稱；
+       避免使用「競品A」「競品B」等佔位符。
+    6. 最少 {min_length} 字元。
+    輸出：純Markdown內容，不含YAML。
+  extend_article: >
+    文章不夠長，目前低於 {min_length} 字元。請延伸以下文章：
+    - 關鍵字：{keyword}
+    - 簡報摘要：{brief}
+    - 原始大綱：{outline}
+    撰寫3-4個額外段落，包含副標題，增加實際案例與FAQ。純Markdown輸出。
+  extend_article_system: >
+    你是 {site_name} 內容編輯，負責延伸文章使其達到最低字數要求。
+  related_links_heading: "## 延伸閱讀 / 推薦連結"
+  fallback_padding_sections:
+    - "{site_name} 用戶故事與使用案例"
+    - "售後支援流程"
+    - "常見問題與購買建議"
+
+  # --- Quality stage ---
+  quality_check_system: >
+    你是 SVICLOUD 品質稽核，需回傳 JSON score 與 notes。
+    主題分類：{topic_type}，地區：{geo_target}。
+  quality_check_user: >
+    請以純 JSON 格式回覆（不要用 markdown 代碼塊包裹），
+    格式範例：{{"score":85,"notes":["語句順暢"]}}
+    評估以下文章是否符合：傳統中文、關鍵字自然出現、強調美國本地優勢、
+    包含內部連結描述、長度>{min_length}字。
+    {truncated_note}
+    文章內容：
+    {content_sample}
+
+  # --- Titling stage ---
+  title_system: "你是SEO文案專家，需輸出JSON資料，並讓標題聚焦消費者需求。"
+  title_user: >
+    請根據下列資訊產出3個繁體中文SEO標題，需包含關鍵字，
+    語氣自然易讀，避免使用英文與重複結尾詞彙，不要全部以『SVICLOUD 專家指南』結尾。
+    每個標題長度請控制在 <= {max_len} 字，且不要以單一字/不完整詞結尾。
+    {disallow_clause}
+    {recent_clause}
+    請回傳JSON格式：{{"titles":[{{"text":"...","reason":"..."}}]}}
+    關鍵字：{keyword}
+    主題類型：{topic_type}
+    地區：{geo_target}
+    內容提要：{brief}
+    大綱：{outline}
+
+# -- Quality thresholds -------------------------------------------------------
+quality:
+  min_score: 80
+  duplicate_threshold: 0.85
+  min_length: 4000
+  outline_score_threshold: 0.75
+  topic_dedupe_top_n: 35
+  claude_weight: 0.55
+  claude_floor: 65
+
+# -- SEO title config ---------------------------------------------------------
+seo:
+  title:
+    claude_model: "claude-haiku-4-5-20251001"
+    max_length: 32
+    min_length_zh: 30
+    recent_window: 40
+    recent_similarity_threshold: 0.8
+    normalize_drop_tokens:
+      - "svicloud"
+      - "小雲"
+      - "小云"
+      - "10p+"
+      - "10p"
+      - "10s"
+      - "tvbox"
+      - "tv box"
+      - "電視盒"
+      - "电视盒"
+    overused_tokens: ["4K", "HDR", "Wi-Fi", "Dolby"]
+    disallowed_tokens: ["4K"]
+    allow_disallowed_for_topic_types: ["comparison"]
+    unsafe_trailing_chars: ["電", "視", "盒", "保", "固", "售", "後", "免", "運", "安", "裝"]
+    fallback_templates:
+      - "{keyword}｜{geo}家庭影音攻略"
+      - "{keyword} 在{geo}怎麼選？{descriptor}一次看"
+      - "{keyword} 實測心得：{benefit} 全解析"
+      - "{keyword} {descriptor}：安裝、售後與服務整理"
+      - "選購{keyword}前必看：{benefit} × {descriptor}"
+      - "{keyword}｜{geo}家庭影音常見問題"
+      - "{geo}華人家庭推薦：{keyword} {descriptor}"
+      - "{keyword} 使用指南：{descriptor}+{benefit}"
+    benefits:
+      - "Wi-Fi 6 雙頻"
+      - "中文客服"
+      - "美國倉儲快速出貨"
+      - "一年美國保固"
+      - "語音搜尋"
+      - "App 市集"
+      - "遠端安裝協助"
+      - "本地維修支援"
+
+# -- Publishing ---------------------------------------------------------------
+publishing:
+  method: "wordpress"
+  staging_hold_hours: 24
+  max_posts_per_week: 2
+  max_posts_per_run: 1
+  timezone: "America/Los_Angeles"
+  base_locale: "zh_TW"
+  locale_param: "lang"
+  publish_translations: true
+  locales: ["zh_TW", "zh_CN", "en_US"]
+  topic_type_priority:
+    - "comparison"
+    - "service"
+    - "campaign"
+    - "geo"
+    - "faq"
+    - "pillar"
+
+wordpress:
+  url: "https://svicloudtvbox.us"
+  method: "rest-api"
+  rest:
+    endpoint: "https://svicloudtvbox.us/wp-json/wp/v2/posts"
+    username: "content-bot@svicloudtvbox.us"
+    password_env: "WP_REST_PASSWORD"
+    status: "publish"
+    author: 2
+    dedupe_remote: true
+    dedupe_pages: 3
+  translation_meta_prefix: "_svic"
+  category_map:
+    default: [24]
+    comparison: [22, 24]
+    service: [24]
+    geo: [24]
+    faq: [24]
+    campaign: [24]
+
+# -- Brand voice --------------------------------------------------------------
+brand_voice:
+  site_name: "SVICLOUD"
+  target_audience: "美國華人家庭、長輩與新移民"
+  tone: "專業且友善，強調產品體驗與美國本地服務"
+  max_enforced_key_phrases: 2
+  key_phrases:
+    - "SVICLOUD 10P+ 4K HDR 串流與 Dolby Audio 影音體驗"
+    - "Wi-Fi 6 雙頻與 128GB 儲存讓長時間追劇依舊順暢"
+    - "中文/英文介面與語音搜尋讓長輩也能輕鬆操作"
+  product_terms:
+    - "小雲電視盒"
+    - "SVICLOUD 10P+"
+    - "SVICLOUD 10S"
+  feature_statements:
+    core:
+      - "SVICLOUD 10P+ 旗艦盒搭載 4K HDR 與 Dolby Audio，可同時處理 OTT 串流與 IPTV 頻道，畫質與音效勝過一般 Android TV 盒。"
+      - "Wi-Fi 6 雙頻與 128GB 儲存結合 AI 智慧快取，讓長時間追劇、錄影備份與 App 切換依舊順暢。"
+      - "中英雙語介面、語音搜尋與家長 PIN 保護，讓長輩與孩子都能快速找到想看的節目。"
+    comparison:
+      - "相較於 EVPAD/UnblockTech 僅有單頻 Wi-Fi，SVICLOUD 10P+ 提供 Wi-Fi 6 + Gigabit Ethernet，4K 串流更穩定。"
+      - "SVICLOUD 維持 Google Play 認證與自有 App Hub，可同時安裝 Netflix、Disney+ 與華語專屬應用。"
+    geo:
+      - "針對 {geo} 用戶，SVICLOUD 10P+ 內建美西/美東內容伺服器節點，華語直播延遲低於 0.8 秒。"
+      - "{geo} 家庭可用語音搜尋快速切換 ESPN、HBO Max 與華語頻道，遙控器內建麥克風。"
+  cta_title: "下一步：實測 SVICLOUD 旗艦盒"
+  cta_points:
+    - "預約 4K HDR + Dolby Audio 示範，體驗戲院等級聲畫"
+    - "詢問 Wi-Fi 6 擺位與 Mesh 配置，解決卡頓延遲"
+    - "請專人遠端設定 App、語言與家長 PIN"
+  cta_tagline: "填寫表單或致電 702-398-3416，由 SVICLOUD 美國產品顧問提供一對一建議。"
+  cta_contact:
+    - "電話：702-398-3416"
+    - "Email：support@svicloudtvbox.us"
+    - "[線上表單](https://svicloudtvbox.us/zh/contact/)"
+
+# -- Content inputs -----------------------------------------------------------
+content_inputs:
+  keyword_source: "../../claudedocs/chinese-keyword-ranking-strategy-nov-2025.md"
+  keyword_brand_terms:
+    - "svicloud"
+    - "tv box"
+    - "小雲"
+    - "電視盒"
+  seed_keywords:
+    - keyword: "小雲盒子詐騙"
+      base_score: 96
+      volume_estimate: 260
+      intent: "reputation"
+    - keyword: "小雲盒子節目表"
+      base_score: 93
+      volume_estimate: 240
+      intent: "how-to"
+    - keyword: "小雲電視盒vs安博"
+      base_score: 94
+      volume_estimate: 230
+      intent: "comparison"
+    - keyword: "小雲盒子官網"
+      base_score: 92
+      volume_estimate: 210
+      intent: "navigational"
+    - keyword: "小雲電視盒不能看"
+      base_score: 95
+      volume_estimate: 250
+      intent: "troubleshooting"
+    - keyword: "小雲盒子yogurt tv怎麼下載"
+      base_score: 92
+      volume_estimate: 220
+      intent: "how-to"
+  fallback_topics:
+    - keyword: "美國買小雲電視盒完整指南 2025"
+      base_score: 75
+      volume_estimate: 350
+    - keyword: "小雲10P+ vs 10S 機型比較"
+      base_score: 72
+      volume_estimate: 340
+    - keyword: "紐約小雲電視盒購買"
+      base_score: 70
+      volume_estimate: 320
+  campaign_tokens: ["新年", "春節", "派對", "節", "2025", "2026"]
+  service_tokens:
+    - "美國倉"
+    - "現貨"
+    - "快速配送"
+    - "免運"
+    - "保固"
+    - "維修"
+    - "售後"
+    - "客服"
+    - "中文客服"
+    - "雙語"
+    - "支援"
+    - "遠端協助"
+  trouble_tokens:
+    - "不能看"
+    - "看不到"
+    - "連不上"
+    - "連線問題"
+    - "故障"
+    - "排除"
+    - "排解"
+    - "錯誤碼"
+  overused_tokens: ["4k", "hdr", "dolby", "wi-fi 6", "wifi 6"]
+  gsc:
+    path: "data/gsc_topics.json"
+    auto_refresh: true
+    site: "https://svicloudtvbox.us/"
+    credentials: "../../secrets/svicloudtvboxus-5b50cc5f2e26.json"
+    lookback_days: 30
+    limit: 200
+    min_impressions: 1
+    max_position: 50
+  locale_targets: ["加州", "紐約", "德州"]
+  angle_rules:
+    legal: ["合法", "法律", "合規", "授權", "版權", "違法", "legal", "law"]
+    comparison: ["vs", "比較", "對比", "差異", "對照", "PK"]
+    upgrade: ["升級", "更新", "新版", "新款", "upgrade", "new model"]
+    usage: ["安裝", "設定", "教學", "指南", "使用", "怎麼", "如何", "FAQ", "常見問題", "故障"]
+    service: ["保固", "售後", "客服", "退貨", "免運", "維修", "支援"]
+  images:
+    default:
+      - url: "https://svicloudtvbox.us/wp-content/themes/svicloudtvbox-lumen/assets/images/hero-voice-assistant-1200.webp"
+        alt: "SVICLOUD 10P+ 4K HDR 旗艦盒"
+        caption: "4K HDR 畫質、Dolby Audio 與 Wi-Fi 6 雙頻串流"
+  hero_images:
+    provider: "openai"
+    output_dir: "data/generated_images"
+    output_format: "webp"
+    quality: 78
+    max_width: 1024
+    max_height: 1024
+    inline: false
+  internal_links:
+    "方案比較": "https://svicloudtvbox.us/zh/compare/"
+    "購買官網": "https://svicloudtvbox.us/zh/"
+    "客服支援": "https://svicloudtvbox.us/zh/contact/"
+    "常見問題": "https://svicloudtvbox.us/zh/faq/"
+  internal_link_settings:
+    max_links: 5
+    min_word_count: 600
+  internal_link_targets:
+    - label: "SVICLOUD 方案比較"
+      url: "https://svicloudtvbox.us/zh/compare/"
+      description: "快速比較 10P+ 與 10S 功能、價格與贈品。"
+    - label: "SVICLOUD 美國官網"
+      url: "https://svicloudtvbox.us/zh/"
+      description: "查看現貨庫存與美國本地折扣。"
+    - label: "美國客服與售後支援"
+      url: "https://svicloudtvbox.us/zh/contact/"
+      description: "預約中文客服協助安裝或報修。"
+    - label: "SVICLOUD 常見問題"
+      url: "https://svicloudtvbox.us/zh/faq/"
+      description: "了解安裝、付款與保固細節。"
+  competitors:
+    path: "data/competitor_topics.json"
+    base_score: 75
+    base_volume: 150
+    auto_refresh: true
+    min_length: 4
+    sites:
+      techunblock.com:
+        urls: ["https://techunblock.com/blog/"]
+        sitemap: "https://techunblock.com/sitemap_index.xml"
+        include_patterns: ["how-to", "guide", "setup", "教學", "安裝"]
+        max_urls: 80
+      svicloudtw.com:
+        urls: ["https://svicloudtw.com/blog/"]
+        sitemap: "https://svicloudtw.com/sitemap_index.xml"
+        include_patterns: ["how-to", "guide", "setup", "教學", "節目表"]
+        max_urls: 80
+  official_features:
+    path: "data/official_features.json"
+    auto_refresh: false
+    url: "https://www.svicloudtvbox.com/"
+    base_score: 90
+    base_volume: 420
+  keyword_filters:
+    allow_patterns:
+      - '(?i)svicloud'
+      - '小雲'
+      - '電視盒'
+      - '(?i)tv ?box'
+      - '(?i)10p\+'
+      - '(?i)10s'
+      - '安博'
+      - '(?i)unblock'
+      - '(?i)evpad'
+    block_patterns:
+      - '(?i)sound\s*bar'
+      - '音響條'
+      - '(?i)toothbrush'
+      - '(?i)jazpiper'
+      - '(?i)air\s*fryer'
+      - '(?i)vacuum'
+
+# -- Storage ------------------------------------------------------------------
+storage:
+  db_path: "data/posts_history.db"
+
+# -- Notifications ------------------------------------------------------------
+notifications:
+  provider: "brevo"
+  recipients: ["blogger@svicloudtvbox.us", "admin@svicloudtvbox.us"]
+  brevo:
+    api_base: "https://api.brevo.com/v3/smtp/email"
+    sender_email: "blogger@svicloudtvbox.us"
+    sender_name: "SVICLOUD TV blogger"
+    api_key_env: "BREVO_API_KEY"
+
+# -- Monitoring ---------------------------------------------------------------
+monitoring:
+  log_level: "INFO"
+  log_path: "logs/automation.log"
+
+# -- Safety -------------------------------------------------------------------
+safety:
+  dry_run: false
+  emergency_stop_file: "EMERGENCY_STOP"
+  fuzzy_title_threshold: 0.82

@@ -1,0 +1,318 @@
+# =============================================================================
+# AI Profile Photo Maker — Blog Automation Config
+# =============================================================================
+# English-language, Azure Blob publisher, AI headshot / portrait keywords.
+
+site:
+  name: "AI Profile Photo Maker"
+  domain: "aiprofilephotomaker.com"
+  url: "https://aiprofilephotomaker.com"
+  default_market: "US"
+
+language: en
+
+# -- API models ---------------------------------------------------------------
+apis:
+  claude_api_key_env: "CLAUDE_API_KEY"
+  openai_api_key_env: "OPENAI_API_KEY"
+  claude_model_brief: "claude-haiku-4-5-20251001"
+  claude_model_outline: "claude-haiku-4-5-20251001"
+  claude_model_full: "claude-sonnet-4-20250514"
+  claude_model_qa: "claude-haiku-4-5-20251001"
+  openai_embedding: "text-embedding-3-small"
+
+# -- Prompt templates ---------------------------------------------------------
+prompt_templates:
+  # --- Briefing ---
+  brief_system: >
+    You are a content strategist for {site_name}. Write a concise 100-word
+    strategic brief focused on {topic_type} content for the {geo_target} market.
+  brief_user: >
+    Write a 100-150 word strategic content brief:
+    - Keyword: {keyword}
+    - Topic type: {topic_type}
+    - Target market: {geo_target}
+    - Comparison focus: {is_comparison}
+    - Seasonal/campaign: {is_campaign}
+    Emphasize: AI-powered headshots, professional quality, instant delivery,
+    privacy-first processing, affordable pricing vs traditional photography.
+  fallback_brief: >
+    Target keyword: {keyword}
+    Audience: Professionals, job seekers, LinkedIn users, remote workers
+    Brand focus: AI-generated headshots, studio-quality results in minutes,
+    privacy-first, fraction of the cost of a photographer.
+
+  # --- Outlining ---
+  outline_system: >
+    You are editorial director for {site_name}. Create 5-7 section outlines
+    covering AI headshot technology, use cases, comparisons, and FAQ.
+  outline_user: >
+    {retry_note}: create a numbered outline based on this brief:
+
+    Brief:
+    {brief}
+
+    Topic type: {topic_type}
+    Target market: {geo_target}
+    Output: numbered list, ≤40 chars each, cover features, use cases, FAQ.
+  fallback_outline_header: "## Content Outline"
+  fallback_outline_header_retry: "## Content Outline (Revised)"
+  fallback_sections:
+    base:
+      - "Why AI headshots are replacing studio photography"
+      - "How {site_name} works: upload, style, download"
+      - "Use cases: LinkedIn, resumes, dating profiles, corporate"
+    comparison: "{site_name} vs traditional photography studios"
+    geo: "AI headshots for {geo_target} professionals"
+    campaign: "Seasonal promotions and special offers"
+    faq: "FAQ: pricing, privacy, turnaround time"
+
+  # --- Drafting ---
+  full_post_system: >
+    You are a content consultant for {site_name}. Write long-form Markdown
+    articles about AI headshot photography with concrete examples, data, and
+    internal links. Topic: {topic_type}, Market: {geo_target}.
+  full_post_user: >
+    Write a complete blog post (Markdown) based on:
+    - Keyword: {keyword}
+    - Brief: {brief}
+    - Outline:
+    {outline}
+    - Topic type: {topic_type}
+    - Target market: {geo_target}
+    Requirements:
+    1. Highlight {site_name}'s AI technology, speed, and affordability naturally.
+    2. Include at least 3 internal links (plain text, script replaces later).
+    3. Add concrete examples and statistics per section.
+    4. End with a CTA directing readers to try the tool.
+    5. Minimum {min_length} characters.
+    Output: pure Markdown, no YAML frontmatter.
+  extend_article: >
+    The article is under {min_length} characters. Extend it:
+    - Keyword: {keyword}
+    - Brief summary: {brief}
+    - Original outline: {outline}
+    Write 3-4 additional paragraphs with sub-headings. Add use cases and FAQ. Pure Markdown.
+  extend_article_system: >
+    You are a content editor for {site_name}. Extend the article to meet minimum length.
+  related_links_heading: "### Related Resources"
+  fallback_padding_sections:
+    - "{site_name} customer success stories"
+    - "Tips for the perfect AI headshot"
+    - "Common questions about AI-generated photos"
+
+  # --- Quality ---
+  quality_check_system: >
+    You are a content quality auditor for {site_name}.
+    Return JSON: {{"score": 0-100, "notes": ["..."]}}.
+  quality_check_user: >
+    Reply with pure JSON (no markdown blocks): {{"score": 85, "notes": ["clear structure"]}}
+    Evaluate against: English, keyword naturally present, {site_name} advantages highlighted,
+    internal link descriptions present, length > {min_length} chars.
+    {truncated_note}
+    Article content:
+    {content_sample}
+
+  # --- Titling ---
+  title_system: "You are an SEO copywriter. Output JSON with titles focused on reader intent."
+  title_user: >
+    Generate 3 SEO-friendly English titles for:
+    - Keyword: {keyword}
+    - Topic type: {topic_type}
+    - Market: {geo_target}
+    - Brief: {brief}
+    Max {max_len} chars per title. {disallow_clause}
+    {recent_clause}
+    Return JSON: {{"titles": [{{"text": "...", "reason": "..."}}]}}
+
+# -- Quality ------------------------------------------------------------------
+quality:
+  min_score: 75
+  duplicate_threshold: 0.85
+  min_length: 3000
+  outline_score_threshold: 0.75
+  claude_weight: 0.6
+  claude_floor: 60
+
+# -- SEO title ----------------------------------------------------------------
+seo:
+  title:
+    claude_model: "claude-haiku-4-5-20251001"
+    max_length: 60
+    min_length: 30
+    recent_window: 30
+    recent_similarity_threshold: 0.82
+    normalize_drop_tokens:
+      - "ai"
+      - "headshot"
+      - "profile photo"
+      - "ai headshot"
+      - "generator"
+    overused_tokens: ["AI", "professional"]
+    disallowed_tokens: []
+    fallback_templates:
+      - "{keyword}: Complete Guide for {geo}"
+      - "{keyword} — {benefit} in Minutes"
+      - "Best {keyword} Tool: {descriptor}"
+    benefits:
+      - "Studio-Quality Results"
+      - "Instant Delivery"
+      - "Privacy-First AI"
+      - "No Photographer Needed"
+    descriptors:
+      - "Complete Guide"
+      - "Honest Review"
+      - "Step-by-Step"
+      - "2025 Comparison"
+
+# -- Publishing (Azure Blob) --------------------------------------------------
+publishing:
+  method: "azure-blob"
+  max_posts_per_week: 3
+  max_posts_per_run: 2
+  timezone: "America/Los_Angeles"
+  azure_blob:
+    connection_string_env: "AZURE_STORAGE_CONNECTION_STRING"
+    container_name: "blog-posts"
+    path_prefix: "aiprofilephotomaker/"
+
+# -- Brand voice --------------------------------------------------------------
+brand_voice:
+  site_name: "AI Profile Photo Maker"
+  target_audience: "Professionals, job seekers, LinkedIn users, entrepreneurs, remote workers"
+  tone: "Professional yet approachable, data-driven, highlighting convenience and quality"
+  max_enforced_key_phrases: 2
+  key_phrases:
+    - "AI-powered headshots that look studio-professional in under 60 seconds"
+    - "No photographer needed — upload a selfie, choose a style, download your headshot"
+    - "Enterprise-grade privacy: your photos are processed and deleted, never stored"
+  product_terms:
+    - "AI headshot"
+    - "AI profile photo"
+    - "AI Profile Photo Maker"
+    - "professional headshot"
+  feature_statements:
+    core:
+      - "AI Profile Photo Maker uses advanced generative AI to transform a simple selfie into a polished, studio-quality headshot — no photographer, no studio, no scheduling."
+      - "Choose from 50+ professional styles including corporate, creative, casual, and industry-specific looks, all generated in under 60 seconds."
+      - "Enterprise-grade privacy: photos are processed in real-time and never stored on our servers. Your data stays yours."
+    comparison:
+      - "Unlike traditional photography studios ($150-500+), AI Profile Photo Maker delivers comparable results for a fraction of the cost with instant turnaround."
+      - "Compared to other AI headshot tools, AI Profile Photo Maker offers more style options, higher resolution output, and true background replacement."
+    geo:
+      - "Perfect for {geo} professionals: generate headshots optimized for US corporate culture and LinkedIn standards."
+  cta_title: "Try AI Profile Photo Maker Free"
+  cta_points:
+    - "Upload a selfie and get your AI headshot in under 60 seconds"
+    - "Choose from 50+ professional styles"
+    - "Download in high resolution — perfect for LinkedIn, resumes, and more"
+  cta_tagline: "Join 100,000+ professionals who upgraded their online presence with AI Profile Photo Maker."
+  cta_contact:
+    - "🔗 [Get Started Free](https://aiprofilephotomaker.com)"
+    - "📧 support@aiprofilephotomaker.com"
+
+# -- Content inputs -----------------------------------------------------------
+content_inputs:
+  keyword_brand_terms:
+    - "ai headshot"
+    - "ai profile photo"
+    - "headshot generator"
+    - "professional headshot"
+    - "linkedin photo"
+  seed_keywords:
+    - keyword: "ai headshot generator"
+      base_score: 95
+      volume_estimate: 8100
+    - keyword: "best ai headshot app"
+      base_score: 93
+      volume_estimate: 5400
+    - keyword: "ai professional headshot"
+      base_score: 92
+      volume_estimate: 4400
+    - keyword: "ai linkedin photo"
+      base_score: 90
+      volume_estimate: 3600
+    - keyword: "ai headshot vs photographer"
+      base_score: 94
+      volume_estimate: 2900
+    - keyword: "corporate headshot ai"
+      base_score: 88
+      volume_estimate: 1900
+    - keyword: "ai headshot for resume"
+      base_score: 87
+      volume_estimate: 2200
+    - keyword: "free ai headshot generator"
+      base_score: 91
+      volume_estimate: 6600
+    - keyword: "ai profile picture maker"
+      base_score: 89
+      volume_estimate: 3200
+    - keyword: "professional headshot at home"
+      base_score: 86
+      volume_estimate: 2800
+  fallback_topics:
+    - keyword: "AI headshot generator complete guide 2025"
+      base_score: 75
+    - keyword: "AI headshots vs professional photographer comparison"
+      base_score: 72
+    - keyword: "How to create a professional LinkedIn photo with AI"
+      base_score: 70
+  campaign_tokens: ["holiday", "new year", "sale", "black friday", "2025", "2026"]
+  service_tokens: ["support", "refund", "privacy", "help", "pricing", "plan"]
+  trouble_tokens: ["not working", "blurry", "bad quality", "error", "fix", "problem"]
+  overused_tokens: ["ai", "professional"]
+  locale_targets: ["US", "UK", "Canada", "Australia"]
+  angle_rules:
+    comparison: ["vs", "versus", "compared", "alternative", "better than"]
+    usage: ["how to", "guide", "tutorial", "tips", "step by step", "setup"]
+    service: ["pricing", "plan", "support", "refund"]
+  images:
+    default:
+      - url: "https://aiprofilephotomaker.com/images/hero-before-after.webp"
+        alt: "AI headshot before and after transformation"
+        caption: "From selfie to studio-quality headshot in seconds"
+  internal_links:
+    "pricing page": "https://aiprofilephotomaker.com/pricing"
+    "style gallery": "https://aiprofilephotomaker.com/styles"
+    "how it works": "https://aiprofilephotomaker.com/how-it-works"
+    "FAQ": "https://aiprofilephotomaker.com/faq"
+  internal_link_targets:
+    - label: "AI Profile Photo Maker Pricing"
+      url: "https://aiprofilephotomaker.com/pricing"
+      description: "See plans starting from free. No credit card required."
+    - label: "50+ Professional Styles"
+      url: "https://aiprofilephotomaker.com/styles"
+      description: "Browse corporate, creative, and casual headshot styles."
+    - label: "How It Works"
+      url: "https://aiprofilephotomaker.com/how-it-works"
+      description: "Upload → Choose Style → Download. Three simple steps."
+    - label: "FAQ"
+      url: "https://aiprofilephotomaker.com/faq"
+      description: "Common questions about AI headshots, privacy, and quality."
+  keyword_filters:
+    allow_patterns:
+      - '(?i)headshot'
+      - '(?i)profile\s*photo'
+      - '(?i)portrait'
+      - '(?i)linkedin\s*photo'
+      - '(?i)ai\s*(headshot|photo|portrait|profile)'
+      - '(?i)professional\s*photo'
+    block_patterns:
+      - '(?i)nude'
+      - '(?i)nsfw'
+      - '(?i)deepfake'
+
+# -- Storage ------------------------------------------------------------------
+storage:
+  db_path: "data/aipm_posts_history.db"
+
+# -- Monitoring ---------------------------------------------------------------
+monitoring:
+  log_level: "INFO"
+  log_path: "logs/aipm_automation.log"
+
+# -- Safety -------------------------------------------------------------------
+safety:
+  dry_run: true  # Start in dry-run; flip to false when ready
+  emergency_stop_file: "EMERGENCY_STOP"
+  fuzzy_title_threshold: 0.82
