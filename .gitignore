@@ -1,51 +1,39 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-*.egg
 *.egg-info/
 dist/
 build/
-eggs/
-parts/
-var/
-sdist/
-develop-eggs/
-.installed.cfg
-lib/
-lib64/
-*.pyo
+.eggs/
+*.egg
 
-# Virtual environments
+# Environment
 .env
-.venv
-env/
+.venv/
 venv/
-ENV/
-env.bak/
-venv.bak/
+env/
 
-# IDEs
-.idea/
+# Data & output (generated at runtime)
+data/
+output/
+drafts/
+logs/
+*.db
+
+# Secrets
+secrets/
+*.json.key
+
+# IDE
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Autoblogger-specific
-data/
-logs/
-drafts/
-*.db
-config.yaml
-# keep configs/ — site configs ARE tracked
-!configs/
-
-# Secrets
-*.pem
-*.key
-secrets/
+# Emergency stop (not code)
+EMERGENCY_STOP

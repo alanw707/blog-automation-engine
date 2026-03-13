@@ -1,96 +1,91 @@
-# blog-automation-engine
+# Autoblogger — Multi-Site Blog Automation Pipeline
 
-AI-powered, config-driven blog post automation for multiple sites. One engine, many sites — each fully configured via a single YAML file.
+Config-driven blog automation that generates SEO-optimized content using Claude AI.
+Each site gets its own YAML config — all prompts, brand voice, and publishing targets
+live in config, not in code.
 
-## What it does
-
-1. **Discovers** topics from seed keywords, Google Search Console data, and competitor scraping
-2. **Generates** full blog posts via Claude: brief → outline → draft → title
-3. **Validates** quality with Claude QA scoring (fallback to heuristics)
-4. **Deduplicates** via slug matching + OpenAI embedding similarity
-5. **Publishes** to:
-   - **WordPress** REST API (svicloudtvbox.us)
-   - **Azure Blob Storage** as Markdown files (aiprofilephotomaker.com)
-   - **Local filesystem** (development / testing)
-6. **Logs** every run to a SQLite database per site
-
-## How to run
+## Quick Start
 
 ```bash
-# Install deps
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# Dry run (safe — no actual publishing)
-python run.py --config configs/aiprofilephotomaker.yaml --dry-run --max-posts 1
+# 2. Copy and fill in environment variables
+cp .env.example .env
+# Edit .env with your API keys
 
-# Real run
+# 3. Dry-run test with a config
+python run.py --config configs/aiprofilephotomaker.yaml --dry-run
+
+# 4. Production run (publishes for real)
 python run.py --config configs/svicloudtvbox.yaml --max-posts 1
 ```
 
-### Required env vars
-
-```bash
-CLAUDE_API_KEY=sk-ant-...          # Anthropic API key
-OPENAI_API_KEY=sk-...              # OpenAI (embeddings, optional but recommended)
-
-# For Azure Blob publisher:
-AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;...
-
-# For WordPress publisher:
-WP_REST_PASSWORD=your-app-password
-```
-
-## Project structure
+## Architecture
 
 ```
-autoblogger/
-├── run.py                  # CLI entry point
-├── configs/
-│   ├── aiprofilephotomaker.yaml   # English site, Azure Blob
-│   └── svicloudtvbox.yaml         # Chinese site, WordPress
-├── src/
-│   ├── pipeline.py         # BlogPipeline orchestrator
-│   ├── models.py           # GeneratedPost, TopicCandidate
-│   └── stages/
-│       ├── publishing.py   # Publisher classes + factory
-│       ├── discovery.py    # Topic discovery helpers
-│       ├── briefing.py     # Brief generation
-│       ├── outlining.py    # Outline generation
-│       ├── drafting.py     # Full post drafting
-│       └── titling.py      # SEO title generation
-├── data/                   # SQLite DBs, GSC cache (gitignored)
-├── logs/                   # Run logs (gitignored)
-├── drafts/                 # Failed QA posts for review (gitignored)
-└── requirements.txt
+run.py                          ← CLI entry point
+src/
+  pipeline.py                   ← BlogPipeline orchestrator
+  models.py                     ← TopicCandidate, GeneratedPost dataclasses
+  stages/
+    discovery.py                ← Topic discovery (keyword plan, GSC, competitors)
+    briefing.py                 ← Strategic content brief generation
+    outlining.py                ← Structured outline generation
+    drafting.py                 ← Full post drafting with enhancements
+    titling.py                  ← SEO title generation with dedup
+    quality.py                  ← Quality validation (Claude + heuristic)
+    publishing.py               ← WordPress, Azure Blob, Local File publishers
+configs/
+  svicloudtvbox.yaml            ← SVICLOUD Chinese config
+  aiprofilephotomaker.yaml      ← AI Profile Photo Maker English config
+  schema.md                     ← Config key reference
 ```
 
-## How to add a new site
+## Pipeline Flow
 
-1. **Copy a config:** `cp configs/aiprofilephotomaker.yaml configs/mysite.yaml`
-2. **Edit `mysite.yaml`:** Set `site_name`, `site_url`, `language`, `publishing.method`, keywords, brand voice, and `storage.db_path`
-3. **Dry-run test:** `python run.py --config configs/mysite.yaml --dry-run --max-posts 1`
-4. **Flip the switch:** Set `safety.dry_run: false` when ready
+```
+Discovery → Briefing → Outlining → Drafting → Titling → Quality → Publishing
+     ↓          ↓          ↓           ↓          ↓         ↓          ↓
+  Topics    Brief text   Outline    Full post   SEO title  Score    WordPress/
+  (scored)  (100 words)  (5-7 pts)  (Markdown)  (deduped)  (0-100)  Azure/Local
+```
 
-### Publishing methods
+Each stage reads prompts from `config["prompt_templates"]` with `str.format()` substitution.
+No site-specific strings exist in the Python code.
 
-| `method`     | What it does                                      | Extra config key |
-|--------------|---------------------------------------------------|------------------|
-| `wordpress`  | Posts to WordPress via REST API                   | `wordpress:`     |
-| `azure_blob` | Uploads `.md` with YAML frontmatter to Azure Blob | `azure_blob:`    |
-| `local_file` | Writes `.md` to local directory                   | `local_file:`    |
+## Supported Publishers
 
-### Prompt templates
+| Method | Config Key | Description |
+|--------|-----------|-------------|
+| `wordpress` | `publishing.method: wordpress` | WordPress REST API |
+| `azure-blob` | `publishing.method: azure-blob` | Azure Blob Storage (.md with YAML frontmatter) |
+| `local-file` | `publishing.method: local-file` | Local filesystem (.md with YAML frontmatter) |
 
-All prompts are in the site YAML under `prompt_templates:`. Available placeholders:
+## Adding a New Site
 
-| Placeholder         | Source                              |
-|---------------------|-------------------------------------|
-| `{site_name}`       | `site_name`                         |
-| `{site_url}`        | `site_url`                          |
-| `{min_length}`      | `quality.min_length`                |
-| `{keyword}`         | Current topic keyword               |
-| `{brand_voice_tone}`| `brand_voice.tone`                  |
-| `{key_phrases}`     | `brand_voice.key_phrases` (joined)  |
-| `{internal_links}`  | `content_inputs.internal_link_targets` |
-| `{content}`         | Post content (for QA/extend)        |
-| `{max_length}`      | `seo.title.max_length`              |
+1. Copy `configs/aiprofilephotomaker.yaml` as a template
+2. Update `site`, `language`, `brand_voice`, `content_inputs`, and `prompt_templates`
+3. Set the appropriate `publishing.method`
+4. Run: `python run.py --config configs/mysite.yaml --dry-run`
+
+## Key Features
+
+- **Config-driven**: All prompts, brand voice, and URLs in YAML
+- **Multi-publisher**: WordPress, Azure Blob, local file
+- **Deduplication**: SQLite history + OpenAI embeddings + fuzzy title matching
+- **Quality scoring**: Claude AI + heuristic fallback with configurable weights
+- **Competitor scraping**: Auto-refresh from competitor sitemaps
+- **GSC integration**: Google Search Console data for topic discovery
+- **Emergency stop**: Create `EMERGENCY_STOP` file to halt pipeline
+
+## Environment Variables
+
+See `.env.example` for the full list. Key variables:
+
+| Variable | Required For |
+|----------|-------------|
+| `CLAUDE_API_KEY` | Content generation (all stages) |
+| `OPENAI_API_KEY` | Embedding-based deduplication |
+| `WP_REST_PASSWORD` | WordPress publishing |
+| `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob publishing |
